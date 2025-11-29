@@ -5,7 +5,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { StatusBadge } from "@/components/StatusBadge";
 import { OrderTimeline } from "@/components/OrderTimeline";
-import { FileText, Download, ArrowLeft } from "lucide-react";
+import { FileText, Download, ArrowLeft, FileCheck } from "lucide-react"; 
 import type { QuoteWithFiles } from "@shared/schema";
 import { useLocation } from "wouter";
 
@@ -14,9 +14,6 @@ export default function QuoteDetails() {
   const [, setLocation] = useLocation();
   const quoteId = params?.id;
 
-  /** --------------------------
-   *  QUOTE FETCH — FIXED VERSION
-   *  -------------------------- */
   const { data: quote, isLoading, error } = useQuery<QuoteWithFiles>({
     queryKey: ["/api/quotes", quoteId],
     enabled: !!quoteId,
@@ -50,6 +47,8 @@ export default function QuoteDetails() {
       </div>
     );
   }
+
+  const technicalDrawingLink = (quote as any).technicalDrawingUrl || (quote as any).technicalDrawingPath;
 
   return (
     <div className="p-8">
@@ -218,6 +217,41 @@ export default function QuoteDetails() {
             )}
           </CardContent>
         </Card>
+
+        {/* --- TEKNİK RESİM KARTI (TASARIM EŞİTLENDİ) --- */}
+        {technicalDrawingLink && (
+          <Card>
+            <CardHeader>
+              <CardTitle>Technical Drawing</CardTitle>
+              <CardDescription>Technical drawing file with tolerance specifications</CardDescription>
+            </CardHeader>
+            <CardContent>
+              {/* Bg rengini kaldırdım, hover-elevate ile yukarıdakinin aynısı oldu */}
+              <div className="flex items-center justify-between p-4 border rounded-md hover-elevate">
+                <div className="flex items-center gap-3">
+                  <FileCheck className="w-5 h-5 text-primary" />
+                  <div>
+                    <p className="font-medium">Technical Drawing File</p>
+                    <p className="text-sm text-muted-foreground">PDF/Image Document</p>
+                  </div>
+                </div>
+
+                {/* Buton stilini 'ghost' yaptım, yukarıdakiyle aynı oldu */}
+                <Button variant="ghost" size="sm" asChild>
+                  <a
+                    href={(technicalDrawingLink as string).replace("/api/objects/upload/", "/uploads/") + "?filename=Teknik_Resim.pdf"}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                  >
+                    <Download className="w-4 h-4 mr-2" />
+                    Download
+                  </a>
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        )}
+        {/* ------------------------------------------------ */}
 
         {/* QUOTE DOCUMENT */}
         {quote.quoteDocumentPath && (

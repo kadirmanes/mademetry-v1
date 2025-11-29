@@ -13,11 +13,6 @@ const upload = multer();
 export async function registerRoutes(app: Express): Promise<Server> {
   await setupLocalAuth(app);
 
-  // ... (Buradaki Register, Login, Logout kodları AYNI KALSIN) ...
-  // ... (Yer kaplamasın diye kısalttım, sen silme sakın!) ...
-  
-  // (Buraya kadar olan kodlar aynı kalsın. Değişiklik aşağıda başlıyor)
-
   // -------------------------
   // USER REGISTER
   // -------------------------
@@ -111,21 +106,29 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // -------------------------
-  // UPLOAD FILE (Manuel Okuma - Düzeltilmiş)
+  // UPLOAD FILE (Manuel Okuma - Düzeltilmiş ve Loglu)
   // -------------------------
   app.put("/api/objects/upload/:id", isAuthenticated, async (req: any, res) => {
     try {
       console.log("✅ UPLOAD Başladı (PUT)...");
       const chunks: any[] = [];
+      
+      // Veriyi parça parça al (Stream)
       req.on('data', (chunk: any) => chunks.push(chunk));
       
+      // Veri bitince birleştir
       req.on('end', async () => {
         const fileBuffer = Buffer.concat(chunks);
-        if (fileBuffer.length === 0) return res.status(400).json({ error: "Empty file" });
+        if (fileBuffer.length === 0) {
+            console.error("❌ HATA: Dosya Boş Geldi");
+            return res.status(400).json({ error: "Empty file" });
+        }
 
         try {
             const s = new ObjectStorageService();
+            // Nextcloud'a gönder
             const remotePath = await s.uploadToNextcloud(req.params.id, fileBuffer);
+            console.log("🎉 Nextcloud Upload Başarılı:", remotePath);
             res.json({ message: "File uploaded", remotePath });
         } catch (ncError) {
             console.error("Nextcloud Error:", ncError);
@@ -139,22 +142,43 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // -------------------------
-  // QUOTES
+  // QUOTES (Teklif Oluşturma - DÜZELTİLDİ)
   // -------------------------
   app.post("/api/quotes", isAuthenticated, async (req: any, res) => {
     try {
+      console.log("📝 Teklif İsteği Geldi");
       const userId = req.user.id;
+
+      // --- DÜZELTME BAŞLANGICI ---
+      // Frontend 'technicalDrawingPath' gönderirse 'technicalDrawingUrl'ye çeviriyoruz.
+      const rawBody = req.body;
+      if (rawBody.technicalDrawingPath && !rawBody.technicalDrawingUrl) {
+          console.log("🔄 İsim Düzeltiliyor: Path -> Url");
+          rawBody.technicalDrawingUrl = rawBody.technicalDrawingPath;
+      }
+      // ---------------------------
+
       const filesSchema = z.object({
         files: z.array(z.object({
           uploadURL: z.string(),
           name: z.string(),
           size: z.number().optional(),
         })).min(1, "At least one file is required"),
+        // Validation şemasına ekliyoruz
+        technicalDrawingUrl: z.string().optional().nullable(),
       });
+
       const combinedSchema = insertQuoteSchema.merge(filesSchema);
-      const validatedData = combinedSchema.parse(req.body);
-      const { files, ...quoteData } = validatedData;
-      const quote = await storage.createQuote({ ...quoteData, userId });
+      const validatedData = combinedSchema.parse(rawBody);
+
+      const { files, technicalDrawingUrl, ...quoteData } = validatedData;
+      
+      // Veritabanına kaydet
+      const quote = await storage.createQuote({ 
+          ...quoteData, 
+          userId,
+          technicalDrawingUrl: technicalDrawingUrl || null // Varsa kaydet, yoksa null
+      });
       
       const fileRecords = await Promise.all(
         files.map(async (file) => {

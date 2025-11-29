@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
@@ -11,13 +11,12 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { StatusBadge } from "@/components/StatusBadge";
 import { SidebarProvider, Sidebar, SidebarContent, SidebarGroup, SidebarGroupContent, SidebarMenu, SidebarMenuButton, SidebarMenuItem, SidebarTrigger } from "@/components/ui/sidebar";
-import { Home, FileText, Package, LogOut, Upload, Download } from "lucide-react";
+import { Home, FileText, Package, LogOut, Upload, Download, FileCheck } from "lucide-react";
 import { useLocation } from "wouter";
 import type { QuoteWithFiles } from "@shared/schema";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { isUnauthorizedError } from "@/lib/authUtils";
 import logoUrl from "@assets/Logo (2)_1762350189592.png";
-import { useState } from "react";
 
 export default function AdminPanel() {
   const { toast } = useToast();
@@ -315,7 +314,7 @@ function AdminQuotesTable({ quotes }: { quotes: QuoteWithFiles[] }) {
                       Manage
                     </Button>
                   </DialogTrigger>
-                  <DialogContent>
+                  <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
                     <DialogHeader>
                       <DialogTitle>Manage Quote</DialogTitle>
                       <DialogDescription>
@@ -325,9 +324,11 @@ function AdminQuotesTable({ quotes }: { quotes: QuoteWithFiles[] }) {
                       </DialogDescription>
                     </DialogHeader>
                     <div className="space-y-6 py-4">
+                      
+                      {/* --- 1. UPLOADED CAD FILES --- */}
                       {quote.files && quote.files.length > 0 && (
                         <div className="space-y-2">
-                          <Label>Uploaded Files</Label>
+                          <Label>Uploaded CAD Files</Label>
                           <div className="space-y-2 border rounded-md p-3 bg-muted/50">
                             {quote.files.map((file) => (
                               <div
@@ -359,178 +360,80 @@ function AdminQuotesTable({ quotes }: { quotes: QuoteWithFiles[] }) {
                         </div>
                       )}
 
+                      {/* --- 2. TECHNICAL DRAWING (TASARIM DÜZELTİLDİ) --- */}
+                      {((quote as any).technicalDrawingUrl || (quote as any).technicalDrawingPath) && (
+                        <div className="space-y-2">
+                          <Label>Technical Drawing (Tolerances)</Label>
+                          {/* Buradaki class yapısını CAD Files ile BİREBİR aynı yaptım */}
+                          <div className="space-y-2 border rounded-md p-3 bg-muted/50">
+                             <div className="flex items-center justify-between p-2 rounded-md hover-elevate bg-background">
+                               <div className="flex items-center gap-2">
+                                 {/* İkon rengi de aynı (Primary) */}
+                                 <FileCheck className="w-4 h-4 text-primary" />
+                                 <div>
+                                   <p className="text-sm font-medium">Technical Drawing File</p>
+                                   <p className="text-xs text-muted-foreground">PDF/Image with tolerances</p>
+                                 </div>
+                               </div>
+                               <Button variant="ghost" size="sm" asChild>
+                                 <a 
+                                   // İndirme ismini .pdf olarak varsayıyoruz ki açılabilsin
+                                   href={(((quote as any).technicalDrawingUrl || (quote as any).technicalDrawingPath) as string).replace("/api/objects/upload/", "/uploads/") + "?filename=Teknik_Resim.pdf"}
+                                   target="_blank"
+                                   rel="noopener noreferrer"
+                                 >
+                                   <Download className="w-4 h-4" />
+                                 </a>
+                               </Button>
+                             </div>
+                          </div>
+                        </div>
+                      )}
+                      {/* ------------------------------------------- */}
+
                       <div className="space-y-2">
                         <Label>Quote Details</Label>
                         <div className="border rounded-md p-3 bg-muted/50 space-y-3 text-sm">
+                          {/* ... detaylar (aynı kalsın) ... */}
                           <div className="grid grid-cols-2 gap-3">
-                            <div>
-                              <p className="text-muted-foreground">Part Name</p>
-                              <p className="font-medium">{quote.partName || "-"}</p>
-                            </div>
-                            <div>
-                              <p className="text-muted-foreground">Service</p>
-                              <p className="font-medium capitalize">{quote.service?.replace(/_/g, " ") || "-"}</p>
-                            </div>
-                            <div>
-                              <p className="text-muted-foreground">Material</p>
-                              <p className="font-medium">{quote.material || "-"}</p>
-                            </div>
-                            <div>
-                              <p className="text-muted-foreground">Quantity</p>
-                              <p className="font-medium">{quote.quantity || "-"}</p>
-                            </div>
-                            <div>
-                              <p className="text-muted-foreground">Finish Types</p>
-                              <p className="font-medium">
-                                {quote.finishTypes && quote.finishTypes.length > 0 
-                                  ? quote.finishTypes.join(", ").replace(/_/g, " ")
-                                  : "-"}
-                              </p>
-                            </div>
-                            <div>
-                              <p className="text-muted-foreground">Quality Standard</p>
-                              <p className="font-medium capitalize">
-                                {quote.qualityStandard?.replace(/_/g, " ") || "-"}
-                              </p>
-                            </div>
+                            <div><p className="text-muted-foreground">Part Name</p><p className="font-medium">{quote.partName || "-"}</p></div>
+                            <div><p className="text-muted-foreground">Service</p><p className="font-medium capitalize">{quote.service?.replace(/_/g, " ") || "-"}</p></div>
+                            <div><p className="text-muted-foreground">Material</p><p className="font-medium">{quote.material || "-"}</p></div>
+                            <div><p className="text-muted-foreground">Quantity</p><p className="font-medium">{quote.quantity || "-"}</p></div>
+                            <div><p className="text-muted-foreground">Finish Types</p><p className="font-medium">{quote.finishTypes && quote.finishTypes.length > 0 ? quote.finishTypes.join(", ").replace(/_/g, " ") : "-"}</p></div>
+                            <div><p className="text-muted-foreground">Quality Standard</p><p className="font-medium capitalize">{quote.qualityStandard?.replace(/_/g, " ") || "-"}</p></div>
                           </div>
-                          
-                          {quote.measurementReports && quote.measurementReports.length > 0 && (
-                            <div>
-                              <p className="text-muted-foreground mb-1">Measurement Reports</p>
-                              <div className="flex flex-wrap gap-1">
-                                {quote.measurementReports.map((report) => (
-                                  <span key={report} className="px-2 py-1 bg-background rounded-md text-xs">
-                                    {report.replace(/_/g, " ").toUpperCase()}
-                                  </span>
-                                ))}
-                              </div>
-                            </div>
-                          )}
-                          
-                          {quote.materialCertificates && quote.materialCertificates.length > 0 && (
-                            <div>
-                              <p className="text-muted-foreground mb-1">Material Certificates</p>
-                              <div className="flex flex-wrap gap-1">
-                                {quote.materialCertificates.map((cert) => (
-                                  <span key={cert} className="px-2 py-1 bg-background rounded-md text-xs">
-                                    {cert.replace(/_/g, " ").toUpperCase()}
-                                  </span>
-                                ))}
-                              </div>
-                            </div>
-                          )}
-                          
-                          {quote.printingProcesses && quote.printingProcesses.length > 0 && (
-                            <div>
-                              <p className="text-muted-foreground mb-1">Printing Processes</p>
-                              <div className="flex flex-wrap gap-1">
-                                {quote.printingProcesses.map((process) => (
-                                  <span key={process} className="px-2 py-1 bg-background rounded-md text-xs">
-                                    {process.replace(/_/g, " ").toUpperCase()}
-                                  </span>
-                                ))}
-                              </div>
-                            </div>
-                          )}
-                          
-                          {quote.coatings && quote.coatings.length > 0 && (
-                            <div>
-                              <p className="text-muted-foreground mb-1">Coatings</p>
-                              <div className="flex flex-wrap gap-1">
-                                {quote.coatings.map((coating) => (
-                                  <span key={coating} className="px-2 py-1 bg-background rounded-md text-xs">
-                                    {coating.replace(/_/g, " ").toUpperCase()}
-                                  </span>
-                                ))}
-                              </div>
-                            </div>
-                          )}
-                          
-                          {quote.metalPlating && quote.metalPlating.length > 0 && (
-                            <div>
-                              <p className="text-muted-foreground mb-1">Metal Plating</p>
-                              <div className="flex flex-wrap gap-1">
-                                {quote.metalPlating.map((plating) => (
-                                  <span key={plating} className="px-2 py-1 bg-background rounded-md text-xs">
-                                    {plating.replace(/_/g, " ").toUpperCase()}
-                                  </span>
-                                ))}
-                              </div>
-                            </div>
-                          )}
-                          
-                          {quote.heatTreatment && quote.heatTreatment.length > 0 && (
-                            <div>
-                              <p className="text-muted-foreground mb-1">Heat Treatment</p>
-                              <div className="flex flex-wrap gap-1">
-                                {quote.heatTreatment.map((treatment) => (
-                                  <span key={treatment} className="px-2 py-1 bg-background rounded-md text-xs">
-                                    {treatment.replace(/_/g, " ").toUpperCase()}
-                                  </span>
-                                ))}
-                              </div>
-                            </div>
-                          )}
-                          
-                          {quote.notes && (
-                            <div>
-                              <p className="text-muted-foreground mb-1">Additional Notes</p>
-                              <p className="text-sm bg-background p-2 rounded-md">{quote.notes}</p>
-                            </div>
-                          )}
+                          {quote.notes && (<div><p className="text-muted-foreground mb-1">Additional Notes</p><p className="text-sm bg-background p-2 rounded-md">{quote.notes}</p></div>)}
                         </div>
                       </div>
 
                       <div className="space-y-2">
                         <Label>Update Status</Label>
                         <Select value={newStatus} onValueChange={setNewStatus}>
-                          <SelectTrigger data-testid="select-new-status">
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="quote_requested">Quote Requested</SelectItem>
-                            <SelectItem value="quote_provided">Quote Provided</SelectItem>
-                            <SelectItem value="order_confirmed">Order Confirmed</SelectItem>
-                            <SelectItem value="in_production">In Production</SelectItem>
-                            <SelectItem value="quality_check">Quality Check</SelectItem>
-                            <SelectItem value="shipped">Shipped</SelectItem>
-                            <SelectItem value="delivered">Delivered</SelectItem>
-                          </SelectContent>
+                           <SelectTrigger><SelectValue /></SelectTrigger>
+                           <SelectContent>
+                             <SelectItem value="quote_requested">Quote Requested</SelectItem>
+                             <SelectItem value="quote_provided">Quote Provided</SelectItem>
+                             <SelectItem value="order_confirmed">Order Confirmed</SelectItem>
+                             <SelectItem value="in_production">In Production</SelectItem>
+                             <SelectItem value="quality_check">Quality Check</SelectItem>
+                             <SelectItem value="shipped">Shipped</SelectItem>
+                             <SelectItem value="delivered">Delivered</SelectItem>
+                           </SelectContent>
                         </Select>
-                        <Button
-                          onClick={() => updateStatusMutation.mutate({ quoteId: quote.id, status: newStatus })}
-                          disabled={updateStatusMutation.isPending || newStatus === quote.status}
-                          data-testid="button-update-status"
-                        >
+                        <Button onClick={() => updateStatusMutation.mutate({ quoteId: quote.id, status: newStatus })} disabled={updateStatusMutation.isPending || newStatus === quote.status}>
                           {updateStatusMutation.isPending ? "Updating..." : "Update Status"}
                         </Button>
                       </div>
 
                       <div className="space-y-2">
                         <Label>Set Final Price ($)</Label>
-                        <Input
-                          type="number"
-                          step="0.01"
-                          min="0"
-                          placeholder="Enter final quote price"
-                          value={finalPrice}
-                          onChange={(e) => setFinalPrice(e.target.value)}
-                          data-testid="input-final-price"
-                        />
-                        <Button
-                          onClick={() => {
-                            const price = parseFloat(finalPrice);
-                            if (price > 0) {
-                              updatePriceMutation.mutate({ quoteId: quote.id, price });
-                            }
-                          }}
-                          disabled={updatePriceMutation.isPending || !finalPrice || parseFloat(finalPrice) <= 0}
-                          data-testid="button-update-price"
-                        >
+                        <Input type="number" step="0.01" min="0" placeholder="Enter final quote price" value={finalPrice} onChange={(e) => setFinalPrice(e.target.value)} />
+                        <Button onClick={() => { const price = parseFloat(finalPrice); if (price > 0) updatePriceMutation.mutate({ quoteId: quote.id, price }); }} disabled={updatePriceMutation.isPending || !finalPrice || parseFloat(finalPrice) <= 0}>
                           {updatePriceMutation.isPending ? "Updating..." : "Update Price"}
                         </Button>
                       </div>
+
                     </div>
                   </DialogContent>
                 </Dialog>

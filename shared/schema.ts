@@ -110,8 +110,11 @@ export const quotes = pgTable("quotes", {
   qualityStandard: varchar("quality_standard", { length: 50 }),
   notes: text("notes"),
   
-  // Technical drawing path (for tolerance drawings)
-  technicalDrawingPath: varchar("technical_drawing_path"),
+  // --- GÜNCELLENEN KISIM ---
+  // Eski: technicalDrawingPath
+  // Yeni: technicalDrawingUrl (Kodlarla uyumlu olması için text yaptık)
+  technicalDrawingUrl: text("technical_drawing_url"),
+  // -------------------------
   
   // Measurement Reports
   measurementReports: text("measurement_reports").array(),
@@ -243,6 +246,12 @@ export const insertQuoteSchema = createInsertSchema(quotes).omit({
   ])).optional(),
   qualityStandard: z.enum(["fine", "medium", "coarse", "very_coarse"]).optional(),
   notes: z.string().optional(),
+  
+  // --- BURAYI EKLEDİK ---
+  // Validation için technicalDrawingUrl alanını ekledik (İsteğe bağlı)
+  technicalDrawingUrl: z.string().optional(),
+  // ----------------------
+
   targetPrice: z.number().positive().optional(),
   measurementReports: z.array(z.string()).optional(),
   materialCertificates: z.array(z.string()).optional(),
