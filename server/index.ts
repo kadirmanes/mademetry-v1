@@ -14,13 +14,6 @@ app.use(cookieParser());
 // NOT: Burada 'setupLocalAuth' çağırmıyoruz çünkü aşağıda
 // 'registerRoutes' fonksiyonu bunu zaten yapıyor. Çakışma engellendi.
 
-// --- DOSYA SUNUCUSU (UPLOADS) ---
-app.use(
-  "/objects",
-  express.static("/var/www/mademetry_uploads", {
-    fallthrough: false,
-  })
-);
 
 // --- LOGLAMA SİSTEMİ (Senin kodun) ---
 app.use((req: Request, res: Response, next: NextFunction) => {

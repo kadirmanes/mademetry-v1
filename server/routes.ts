@@ -13,20 +13,22 @@ const upload = multer();
 export async function registerRoutes(app: Express): Promise<Server> {
   await setupLocalAuth(app);
 
+  // ... (Buradaki Register, Login, Logout kodları AYNI KALSIN) ...
+  // ... (Yer kaplamasın diye kısalttım, sen silme sakın!) ...
+  
+  // (Buraya kadar olan kodlar aynı kalsın. Değişiklik aşağıda başlıyor)
+
   // -------------------------
   // USER REGISTER
   // -------------------------
   app.post('/api/register', async (req, res) => {
     try {
       const validatedData = insertUserSchema.parse(req.body);
-
       const existingUser = await storage.getUserByEmail(validatedData.email);
       if (existingUser) {
         return res.status(400).json({ message: "Email already registered" });
       }
-
       const hashedPassword = await hashPassword(validatedData.password);
-
       const user = await storage.createUser({
         email: validatedData.email,
         password: hashedPassword,
@@ -34,21 +36,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
         lastName: validatedData.lastName,
         profileImageUrl: validatedData.profileImageUrl,
       });
-
       req.login(user, (err) => {
-        if (err) {
-          return res.status(500).json({ message: "Registration successful but login failed" });
-        }
-        const userWithoutPassword = {
-          id: user.id,
-          email: user.email,
-          firstName: user.firstName,
-          lastName: user.lastName,
-          profileImageUrl: user.profileImageUrl,
-          isAdmin: user.isAdmin,
-          createdAt: user.createdAt,
-          updatedAt: user.updatedAt,
-        };
+        if (err) return res.status(500).json({ message: "Registration successful but login failed" });
+        const { password, ...userWithoutPassword } = user; 
         res.json(userWithoutPassword);
       });
     } catch (error) {
@@ -71,11 +61,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ message: "Validation error", errors: error.errors });
       }
     }
-
     passport.authenticate('local', (err: any, user: any, info: any) => {
       if (err) return res.status(500).json({ message: "Authentication failed" });
       if (!user) return res.status(401).json({ message: info?.message || "Invalid credentials" });
-
       req.login(user, (err) => {
         if (err) return res.status(500).json({ message: "Login failed" });
         res.json(user);
@@ -100,18 +88,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const user = await storage.getUser(req.user.id);
       if (!user) return res.status(404).json({ message: "User not found" });
-
-      const userWithoutPassword = {
-        id: user.id,
-        email: user.email,
-        firstName: user.firstName,
-        lastName: user.lastName,
-        profileImageUrl: user.profileImageUrl,
-        isAdmin: user.isAdmin,
-        createdAt: user.createdAt,
-        updatedAt: user.updatedAt,
-      };
-
+      const { password, ...userWithoutPassword } = user;
       res.json(userWithoutPassword);
     } catch (error) {
       console.error("Error fetching user:", error);
@@ -120,7 +97,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // -------------------------
-  // CREATE UPLOAD ID (Nextcloud)
+  // CREATE UPLOAD ID
   // -------------------------
   app.post("/api/objects/upload", isAuthenticated, async (req, res) => {
     try {
@@ -134,31 +111,32 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // -------------------------
-  // UPLOAD FILE TO NEXTCLOUD
+  // UPLOAD FILE (Manuel Okuma - Düzeltilmiş)
   // -------------------------
-  app.post("/api/objects/upload/:id",
-    isAuthenticated,
-    upload.single("file"),
-    async (req: any, res) => {
-      try {
-        const fileData = req.file;
-        if (!fileData) {
-          return res.status(400).json({ error: "No file uploaded" });
+  app.put("/api/objects/upload/:id", isAuthenticated, async (req: any, res) => {
+    try {
+      console.log("✅ UPLOAD Başladı (PUT)...");
+      const chunks: any[] = [];
+      req.on('data', (chunk: any) => chunks.push(chunk));
+      
+      req.on('end', async () => {
+        const fileBuffer = Buffer.concat(chunks);
+        if (fileBuffer.length === 0) return res.status(400).json({ error: "Empty file" });
+
+        try {
+            const s = new ObjectStorageService();
+            const remotePath = await s.uploadToNextcloud(req.params.id, fileBuffer);
+            res.json({ message: "File uploaded", remotePath });
+        } catch (ncError) {
+            console.error("Nextcloud Error:", ncError);
+            res.status(500).json({ error: "Nextcloud upload failed" });
         }
-
-        const s = new ObjectStorageService();
-        const remotePath = await s.uploadToNextcloud(req.params.id, fileData.buffer);
-
-        res.json({
-          message: "File uploaded",
-          remotePath,
-        });
-      } catch (error) {
-        console.error("Error uploading file:", error);
-        res.status(500).json({ error: "Upload failed" });
-      }
+      });
+    } catch (error) {
+      console.error("Upload Error:", error);
+      res.status(500).json({ error: "Upload failed" });
     }
-  );
+  });
 
   // -------------------------
   // QUOTES
@@ -166,7 +144,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/quotes", isAuthenticated, async (req: any, res) => {
     try {
       const userId = req.user.id;
-
       const filesSchema = z.object({
         files: z.array(z.object({
           uploadURL: z.string(),
@@ -174,13 +151,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
           size: z.number().optional(),
         })).min(1, "At least one file is required"),
       });
-
       const combinedSchema = insertQuoteSchema.merge(filesSchema);
       const validatedData = combinedSchema.parse(req.body);
-
       const { files, ...quoteData } = validatedData;
       const quote = await storage.createQuote({ ...quoteData, userId });
-
+      
       const fileRecords = await Promise.all(
         files.map(async (file) => {
           return await storage.createQuoteFile({
@@ -192,10 +167,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
           });
         })
       );
-
       const quoteWithFiles = await storage.getQuote(quote.id);
       res.json(quoteWithFiles);
-
     } catch (error) {
       console.error("Error creating quote:", error);
       if (error instanceof z.ZodError) {
@@ -219,12 +192,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const quote = await storage.getQuote(req.params.id);
       if (!quote) return res.status(404).json({ error: "Quote not found" });
-
       const user = await storage.getUser(req.user.id);
       if (quote.userId !== req.user.id && user?.isAdmin !== 1) {
         return res.status(403).json({ error: "Forbidden" });
       }
-
       res.json(quote);
     } catch (error) {
       console.error("Error fetching quote:", error);
@@ -233,18 +204,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // -------------------------
-  // ADMIN QUOTES
+  // ADMIN
   // -------------------------
   app.get("/api/admin/quotes", isAuthenticated, async (req: any, res) => {
     try {
       const user = await storage.getUser(req.user.id);
-      if (user?.isAdmin !== 1) {
-        return res.status(403).json({ error: "Forbidden - Admin required" });
-      }
-
+      if (user?.isAdmin !== 1) return res.status(403).json({ error: "Forbidden" });
       const quotes = await storage.getAllQuotes();
       res.json(quotes);
-
     } catch (error) {
       console.error("Error fetching all quotes:", error);
       res.status(500).json({ error: "Internal server error" });
@@ -254,15 +221,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.put("/api/admin/quotes/:id/status", isAuthenticated, async (req: any, res) => {
     try {
       const user = await storage.getUser(req.user.id);
-      if (user?.isAdmin !== 1) {
-        return res.status(403).json({ error: "Forbidden" });
-      }
-
+      if (user?.isAdmin !== 1) return res.status(403).json({ error: "Forbidden" });
       const validatedData = updateQuoteStatusSchema.parse(req.body);
       const quote = await storage.updateQuoteStatus(req.params.id, validatedData.status, validatedData.notes);
-
       res.json(quote);
-
     } catch (error) {
       console.error("Error updating quote status:", error);
       res.status(500).json({ error: "Internal server error" });
@@ -272,34 +234,54 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.put("/api/admin/quotes/:id/price", isAuthenticated, async (req: any, res) => {
     try {
       const user = await storage.getUser(req.user.id);
-      if (user?.isAdmin !== 1) {
-        return res.status(403).json({ error: "Forbidden" });
-      }
-
+      if (user?.isAdmin !== 1) return res.status(403).json({ error: "Forbidden" });
       const validatedData = updateQuotePriceSchema.parse(req.body);
       const quote = await storage.updateQuotePrice(req.params.id, validatedData.finalPrice);
-
       res.json(quote);
-
     } catch (error) {
       console.error("Error updating quote price:", error);
       res.status(500).json({ error: "Internal server error" });
     }
   });
-// -------------------------
-// DOWNLOAD OBJECT (Nextcloud)
-// -------------------------
-app.get("/objects/*", isAuthenticated, async (req: any, res) => {
-  try {
-    const objectPath = req.params[0];   // "uploads/UUID"
-    const storage = new ObjectStorageService();
 
-    await storage.downloadObject(objectPath, res);
-  } catch (err) {
-    console.error("Download error:", err);
-    return res.status(404).send("Not Found");
-  }
-});
+  // ============================================================
+  // 🔥🔥🔥 YENİ EKLENEN KISIM: İNDİRME ROTALARI 🔥🔥🔥
+  // ============================================================
+
+  // 1. Alternatif Rota: Frontend /uploads/UUID linki ürettiği için bunu yakalıyoruz.
+  app.get("/uploads/:id", isAuthenticated, async (req: any, res) => {
+    try {
+      const fileId = req.params.id; // UUID (Örn: 1fe6...)
+      const filename = req.query.filename as string;
+      
+      // Nextcloud'daki gerçek yol: uploads/UUID
+      const objectPath = `uploads/${fileId}`; 
+      const storage = new ObjectStorageService();
+      
+      // İndirilen dosyaya doğru ismini verelim
+      if (filename) {
+        // Türkçe karakterleri encode edelim ki bozulmasın
+        res.setHeader('Content-Disposition', `attachment; filename="${encodeURIComponent(filename)}"`);
+      }
+
+      await storage.downloadObject(objectPath, res);
+    } catch (err) {
+      console.error("Download error (/uploads):", err);
+      return res.status(404).send("Not Found");
+    }
+  });
+
+  // 2. Orijinal Rota (Yedek olarak kalsın)
+  app.get("/objects/*", isAuthenticated, async (req: any, res) => {
+    try {
+      const objectPath = req.params[0];
+      const storage = new ObjectStorageService();
+      await storage.downloadObject(objectPath, res);
+    } catch (err) {
+      console.error("Download error (/objects):", err);
+      return res.status(404).send("Not Found");
+    }
+  });
 
   // -------------------------
   // HTTP SERVER
